@@ -69,8 +69,6 @@ module "eks" {
   # To add the current caller identity as an administrator
   enable_cluster_creator_admin_permissions = true
 
-  access_entries = {}
-
   tags = {
     Name = "${local.stack_name}-cluster"
   }
