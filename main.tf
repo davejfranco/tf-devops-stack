@@ -122,7 +122,10 @@ resource "helm_release" "external_secrets" {
     value = module.external_secrets.iam_role_arn
   }
 
-  depends_on = [module.eks]
+  depends_on = [
+    module.eks,
+    module.external_secrets
+  ]
 }
 
 resource "kubectl_manifest" "cluster_store" {
@@ -146,6 +149,8 @@ spec:
             name: external-secrets
             namespace: external-secrets
   YAML
+
+  depends_on = [helm_release.external_secrets]
 }
 
 resource "aws_secretsmanager_secret" "github_token" {
@@ -191,6 +196,7 @@ spec:
       property: github_token
 
   YAML
+  depends_on        = [helm_release.external_secrets]
 }
 
 resource "helm_release" "actions_runner" {
@@ -199,9 +205,14 @@ resource "helm_release" "actions_runner" {
   namespace        = "runner-system"
   chart            = "actions-runner-controller"
   create_namespace = true
+  upgrade_install  = true
   repository       = "https://actions-runner-controller.github.io/actions-runner-controller"
 
-  depends_on = [module.eks]
+  depends_on = [
+    module.eks,
+    helm_release.cert_manager,
+    kubectl_manifest.cluster_store
+  ]
 }
 
 resource "kubectl_manifest" "runner_deployment" {
@@ -228,11 +239,41 @@ spec:
   depends_on = [helm_release.actions_runner]
 }
 
+data "aws_iam_openid_connect_provider" "github" {
+  url = "https://token.actions.githubusercontent.com"
+}
 
+module "iam_github_oidc_role" {
+  source = "terraform-aws-modules/iam/aws//modules/iam-github-oidc-role"
 
+  name = "${local.stack_name}-gha-role"
 
+  # This should be updated to suit your organization, repository, references/branches, etc.
+  subjects = [
+    "repo:davejfranco/tf-devops-stack:*"
+  ]
 
+  policies = {
+    admin = "arn:aws:iam::aws:policy/AdministratorAccess"
+  }
+}
 
+resource "aws_eks_access_entry" "github" {
+  cluster_name      = module.eks.cluster_name
+  principal_arn     = module.iam_github_oidc_role.arn
+  kubernetes_groups = []
+  type              = "STANDARD"
+}
+
+resource "aws_eks_access_policy_association" "github" {
+  cluster_name  = module.eks.cluster_name
+  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+  principal_arn = module.iam_github_oidc_role.arn
+
+  access_scope {
+    type = "cluster"
+  }
+}
 
 
 
