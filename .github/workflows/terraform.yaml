@@ -44,4 +44,4 @@ jobs:
         run: terraform validate
 
       - name: Terraform Plan
-        run: terraform plan -no-color
+        run: terraform plan -var 'github_token=${{ secrets.TOKEN }}'
