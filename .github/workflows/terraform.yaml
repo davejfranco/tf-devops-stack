@@ -25,6 +25,10 @@ jobs:
           role-to-assume: ${{ secrets.AWS_IAM_ROLE }}
           role-session-name: YoutubeDemo
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
